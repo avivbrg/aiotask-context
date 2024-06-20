@@ -6,6 +6,7 @@ from copy import deepcopy
 from functools import partial
 
 PY37 = sys.version_info >= (3, 7)
+PY311 = sys.version_info >= (3, 11)
 
 if PY37:
     def asyncio_current_task(loop=None):
@@ -55,7 +56,7 @@ def chainmap_context_factory(parent_context=None):
         return parent_context.new_child()
 
 
-def task_factory(loop, coro, copy_context=False, context_factory=None):
+def task_factory(loop, coro, context=None, copy_context=False, context_factory=None):
     """
     By default returns a task factory that uses a simple dict as the task context,
     but allows context creation and inheritance to be customized via ``context_factory``.
@@ -63,7 +64,10 @@ def task_factory(loop, coro, copy_context=False, context_factory=None):
     context_factory = context_factory or partial(
         dict_context_factory, copy_context=copy_context)
 
-    task = asyncio.tasks.Task(coro, loop=loop)
+    if PY311:
+        task = asyncio.tasks.Task(coro, loop=loop, context=context)
+    else:
+        task = asyncio.tasks.Task(coro, loop=loop)
     if task._source_traceback:
         del task._source_traceback[-1]
 
@@ -77,7 +81,7 @@ def task_factory(loop, coro, copy_context=False, context_factory=None):
     return task
 
 
-def copying_task_factory(loop, coro):
+def copying_task_factory(loop, coro, context=None):
     """
     Returns a task factory that copies a task's context into new tasks instead of
     sharing it.
@@ -86,10 +90,10 @@ def copying_task_factory(loop, coro):
     :param coro: A coroutine object
     :return: A context-copying task factory
     """
-    return task_factory(loop, coro, copy_context=True)
+    return task_factory(loop, coro, context=context, copy_context=True)
 
 
-def chainmap_task_factory(loop, coro):
+def chainmap_task_factory(loop, coro, context=None):
     """
     Returns a task factory that uses ``ChainMap`` as the context.
 
@@ -97,7 +101,7 @@ def chainmap_task_factory(loop, coro):
     :param coro: A coroutine object
     :return: A ``ChainMap`` task factory
     """
-    return task_factory(loop, coro, context_factory=chainmap_context_factory)
+    return task_factory(loop, coro, context=context, context_factory=chainmap_context_factory)
 
 
 def get(key, default=None):
